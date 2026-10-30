@@ -333,7 +333,7 @@ export function Recognizer() {
     const url = colorShareUrl(rgb)
     if (typeof navigator.share === 'function') {
       try {
-        await navigator.share({ title: 'ColorRecognizer', text: `${label}\n${url}`, url })
+        await navigator.share({ title: 'ColorRecognizer', text: label, url })
         return
       } catch (caught) {
         if (caught instanceof DOMException && caught.name === 'AbortError') return

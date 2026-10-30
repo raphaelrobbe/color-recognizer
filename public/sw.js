@@ -1,11 +1,12 @@
 /* App shell: after the first visit, the page and its assets open offline. */
-const CACHE = 'color-recognizer-shell-v2'
+const CACHE = 'color-recognizer-shell-v4'
 
 const PRECACHE = [
   '',
   'index.html',
   'site.webmanifest',
   'favicon.svg',
+  'logo.svg',
   'app-icon-192.png',
   'app-icon-512.png',
   'app-icon-maskable-192.png',

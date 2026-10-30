@@ -15,9 +15,15 @@ import {
   type Rgb,
 } from '~/lib/color'
 import { loadSavedColors, storeSavedColors, type SavedColor } from '~/lib/saved-colors'
+import { colorShareUrl, rgbFromSearch } from '~/lib/share-link'
 
 type Facing = 'environment' | 'user'
 type Phase = 'idle' | 'camera' | 'photo' | 'saved' | 'library'
+
+function linkedColor(): Rgb | null {
+  if (typeof window === 'undefined') return null
+  return rgbFromSearch(window.location.search)
+}
 
 const primaryButton =
   'rounded-full bg-neutral-950 px-5 py-3 text-sm font-semibold text-white disabled:opacity-50'
@@ -33,7 +39,7 @@ export function Recognizer() {
   const pointRef = useRef<{ x: number; y: number } | null>(null)
   const gestureCleanupRef = useRef<(() => void) | null>(null)
 
-  const [phase, setPhase] = useState<Phase>('idle')
+  const [phase, setPhase] = useState<Phase>(() => (linkedColor() ? 'saved' : 'idle'))
   const [facing, setFacing] = useState<Facing>('environment')
   const [opening, setOpening] = useState(false)
   const [ready, setReady] = useState(false)
@@ -41,12 +47,14 @@ export function Recognizer() {
   const [photoUrl, setPhotoUrl] = useState<string | null>(null)
   const [natural, setNatural] = useState<{ w: number; h: number } | null>(null)
   const [point, setPoint] = useState<{ x: number; y: number } | null>(null)
-  const [sample, setSample] = useState<Rgb | null>(null)
-  const [draft, setDraft] = useState<Oklch | null>(null)
+  const [sample, setSample] = useState<Rgb | null>(linkedColor)
+  const [draft, setDraft] = useState<Oklch | null>(() => {
+    const rgb = linkedColor()
+    return rgb ? rgbToOklch(rgb) : null
+  })
   const [tweaked, setTweaked] = useState(false)
   const [radius, setRadius] = useState(4)
   const [copied, setCopied] = useState<string | null>(null)
-  const [canNativeShare, setCanNativeShare] = useState(false)
   const [savedColors, setSavedColors] = useState<SavedColor[]>([])
   const [colorName, setColorName] = useState('')
   const [savedNotice, setSavedNotice] = useState<string | null>(null)
@@ -61,7 +69,6 @@ export function Recognizer() {
   const shift = sample && shown ? deltaE(sample, shown) : 0
 
   useEffect(() => {
-    setCanNativeShare(typeof navigator.share === 'function')
     setSavedColors(loadSavedColors())
   }, [])
 
@@ -137,6 +144,24 @@ export function Recognizer() {
     setSample(null)
     setDraft(null)
     setTweaked(false)
+  }
+
+  function openExample() {
+    const image = new Image()
+    image.onload = () => {
+      const canvas = document.createElement('canvas')
+      canvas.width = 900
+      canvas.height = 720
+      const context = canvas.getContext('2d')
+      if (!context) return
+      context.fillStyle = '#f3eee6'
+      context.fillRect(0, 0, canvas.width, canvas.height)
+      const logoWidth = 760
+      const logoHeight = logoWidth * (46 / 64)
+      context.drawImage(image, (canvas.width - logoWidth) / 2, (canvas.height - logoHeight) / 2, logoWidth, logoHeight)
+      usePhoto(canvas.toDataURL('image/png'))
+    }
+    image.src = `${import.meta.env.BASE_URL}logo.svg`
   }
 
   function usePhoto(url: string) {
@@ -304,18 +329,17 @@ export function Recognizer() {
     setTweaked(true)
   }
 
-  async function shareColor(rgb: Rgb, text: string, label: string) {
-    if (typeof navigator.share !== 'function') return
-    const file = await swatchFile(rgb, label)
-    const withFile: ShareData = { title: 'ColorRecognizer', text, files: file ? [file] : undefined }
-    const payload: ShareData =
-      file && navigator.canShare?.({ files: [file] }) ? withFile : { title: 'ColorRecognizer', text }
-    try {
-      await navigator.share(payload)
-    } catch (caught) {
-      if (caught instanceof DOMException && caught.name === 'AbortError') return
-      setError("Le partage n'est pas disponible sur cet appareil.")
+  async function shareColor(rgb: Rgb, label: string) {
+    const url = colorShareUrl(rgb)
+    if (typeof navigator.share === 'function') {
+      try {
+        await navigator.share({ title: 'ColorRecognizer', text: `${label}\n${url}`, url })
+        return
+      } catch (caught) {
+        if (caught instanceof DOMException && caught.name === 'AbortError') return
+      }
     }
+    await copyText('share', url)
   }
 
   async function copyText(id: string, text: string) {
@@ -331,12 +355,24 @@ export function Recognizer() {
 
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-lg flex-col px-4 py-6 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
-      <header className="text-white">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/70">Mesure</p>
-        <h1 className="mt-1 text-3xl font-semibold tracking-tight">ColorRecognizer</h1>
-        <p className="mt-2 text-sm leading-relaxed text-white/80">
-          Prenez une photo, touchez l'endroit à mesurer, puis ajustez la pastille jusqu'à ce qu'elle
-          colle à ce que vous voyez. Une fois chargée, l'application s'ouvre hors ligne.
+      <header className="text-neutral-950">
+        <div className="flex items-center gap-3">
+          <img
+            src={`${import.meta.env.BASE_URL}logo.svg`}
+            alt=""
+            width={78}
+            height={56}
+            className="h-14 w-auto shrink-0"
+          />
+          <div className="min-w-0">
+            <h1 className="text-3xl font-semibold tracking-tight">ColorRecognizer</h1>
+          </div>
+        </div>
+        <p className="mt-2 text-sm leading-relaxed text-neutral-700">
+          Prenez une photo, touchez l'endroit à mesurer, puis ajustez la pastille avec les curseurs
+          jusqu'à ce qu'elle colle à ce que vous voyez.
+          <br />
+          Enregistrez, partagez.
         </p>
         <InstallApp />
       </header>
@@ -355,7 +391,7 @@ export function Recognizer() {
             <button type="button" className={secondaryButton} onClick={() => fileRef.current?.click()}>
               Importer une image
             </button>
-            <button type="button" className={secondaryButton} onClick={() => usePhoto(examplePhoto())}>
+            <button type="button" className={secondaryButton} onClick={() => void openExample()}>
               Essayer sur une image d'exemple
             </button>
             <button type="button" className={secondaryButton} onClick={openLibrary}>
@@ -449,7 +485,7 @@ export function Recognizer() {
               aria-label="Déclencher"
               disabled={!ready}
               onClick={capture}
-              className="size-16 rounded-full border-4 border-white bg-white/90 shadow-lg disabled:opacity-40"
+              className="size-16 rounded-full border-4 border-neutral-950 bg-white shadow-lg disabled:opacity-40"
             />
             <button
               type="button"
@@ -538,17 +574,15 @@ export function Recognizer() {
           {shown && codes && draft ? (
             <div className="space-y-4">
               <div className="relative overflow-hidden rounded-3xl shadow-lg" style={{ backgroundColor: rgbToHex(shown) }}>
-                {canNativeShare ? (
-                  <button
-                    type="button"
-                    aria-label="Partager"
-                    className="absolute top-3 right-3 grid size-11 place-items-center rounded-full bg-black/15"
-                    style={{ color: inkOn(shown) }}
-                    onClick={() => void shareColor(shown, codes.text, codes.ncs.precise)}
-                  >
-                    <ShareIcon />
-                  </button>
-                ) : null}
+                <button
+                  type="button"
+                  aria-label={copied === 'share' ? 'Lien copié' : 'Partager'}
+                  className="absolute top-3 right-3 grid size-11 place-items-center rounded-full bg-black/15"
+                  style={{ color: inkOn(shown) }}
+                  onClick={() => void shareColor(shown, codes.ncs.precise)}
+                >
+                  <ShareIcon />
+                </button>
                 <div className="flex min-h-52 flex-col items-center justify-center px-4 py-8 text-center" style={{ color: inkOn(shown) }}>
                   <p className="text-xs font-semibold uppercase tracking-[0.16em] opacity-80">À comparer à ce que vous voyez</p>
                   <p className="mt-2 text-3xl font-semibold tracking-tight">{codes.ncs.precise}</p>
@@ -557,6 +591,7 @@ export function Recognizer() {
                   ) : null}
                 </div>
               </div>
+              {copied === 'share' ? <p className="text-center text-sm font-semibold text-neutral-700">Lien copié.</p> : null}
 
               <div className="rounded-3xl bg-white p-4 shadow-lg">
                 <div className="flex items-center gap-3">
@@ -670,7 +705,7 @@ export function Recognizer() {
               </div>
             </div>
           ) : null}
-          {error ? <p className="text-sm text-red-100">{error}</p> : null}
+          {error ? <p className="text-sm text-red-800">{error}</p> : null}
         </section>
       ) : null}
 
@@ -701,26 +736,6 @@ function ShareIcon() {
       <path d="M6 12.5V18a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-5.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
     </svg>
   )
-}
-
-function swatchFile(rgb: Rgb, label: string): Promise<File | null> {
-  const canvas = document.createElement('canvas')
-  canvas.width = 800
-  canvas.height = 800
-  const context = canvas.getContext('2d')
-  if (!context) return Promise.resolve(null)
-  context.fillStyle = rgbToHex(rgb)
-  context.fillRect(0, 0, 800, 800)
-  context.fillStyle = inkOn(rgb)
-  context.font = '600 54px sans-serif'
-  context.textAlign = 'center'
-  context.textBaseline = 'middle'
-  context.fillText(label, 400, 400)
-  return new Promise((resolve) => {
-    canvas.toBlob((blob) => {
-      resolve(blob ? new File([blob], 'color-recognizer.png', { type: 'image/png' }) : null)
-    }, 'image/png')
-  })
 }
 
 function Slider({
@@ -782,23 +797,4 @@ function cameraMessage(error: unknown): string {
     if (error.name === 'NotReadableError') return "L'appareil photo est déjà utilisé par une autre application."
   }
   return "Impossible d'ouvrir l'appareil photo. Importez une photo à la place."
-}
-
-function examplePhoto(): string {
-  const canvas = document.createElement('canvas')
-  canvas.width = 640
-  canvas.height = 860
-  const context = canvas.getContext('2d')
-  if (!context) return ''
-  const patches = ['#d7d3cc', '#c4493a', '#e2b13c', '#2f6f4e', '#2c4c7c', '#8d5a3c']
-  patches.forEach((color, index) => {
-    const column = index % 2
-    const row = Math.floor(index / 2)
-    context.fillStyle = color
-    context.fillRect(column * 320, row * 280, 320, 280)
-  })
-  context.fillStyle = 'rgba(255,255,255,0.85)'
-  context.font = '600 28px sans-serif'
-  context.fillText('Touchez une zone', 36, 800)
-  return canvas.toDataURL('image/jpeg', 0.92)
 }

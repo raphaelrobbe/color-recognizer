@@ -26,11 +26,11 @@ export const links: LinksFunction = () => {
 
 export function Layout({ children }: { children: ReactNode }) {
   return (
-    <html lang="fr" style={{ backgroundColor: '#6f6f6f' }}>
+    <html lang="fr" style={{ backgroundColor: '#f3eee6' }}>
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <meta name="theme-color" content="#6f6f6f" />
+        <meta name="theme-color" content="#f3eee6" />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-title" content="ColorRecognizer" />
@@ -45,7 +45,7 @@ export function Layout({ children }: { children: ReactNode }) {
           />
         ) : null}
       </head>
-      <body style={{ margin: 0, backgroundColor: '#6f6f6f', color: '#1a1a1a' }}>
+      <body style={{ margin: 0, backgroundColor: '#f3eee6', color: '#1a1a1a' }}>
         {children}
         <ScrollRestoration />
         <Scripts />
@@ -66,7 +66,7 @@ export function HydrateFallback() {
   return (
     <p
       className="grid min-h-dvh place-items-center font-sans text-lg"
-      style={{ margin: 0, backgroundColor: '#6f6f6f', color: '#f4f4f4' }}
+      style={{ margin: 0, backgroundColor: '#f3eee6', color: '#1a1a1a' }}
     >
       Chargement…
     </p>
@@ -81,7 +81,7 @@ export function ErrorBoundary() {
   }, [error])
 
   return (
-    <main className="grid min-h-dvh place-items-center px-4 text-center" style={{ backgroundColor: '#6f6f6f', color: '#f4f4f4' }}>
+    <main className="grid min-h-dvh place-items-center px-4 text-center" style={{ backgroundColor: '#f3eee6', color: '#1a1a1a' }}>
       <div>
         <h1 className="text-xl font-semibold">Quelque chose s'est mal passé</h1>
         <p className="mt-2">Rechargez la page pour reprendre la mesure.</p>

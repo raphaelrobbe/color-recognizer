@@ -12,7 +12,11 @@ body {
 
 body {
   margin: 0;
-  background: #6f6f6f;
+  background: #f3eee6;
+}
+
+button:hover:not(:disabled) {
+  cursor: pointer;
 }
 
 input[type='range'] {

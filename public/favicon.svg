@@ -1,6 +1,37 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <rect width="16" height="16" fill="#e2b13c"/>
-  <rect x="16" width="16" height="16" fill="#c4473a"/>
-  <rect y="16" width="16" height="16" fill="#2f6f4e"/>
-  <rect x="16" y="16" width="16" height="16" fill="#2c4c7c"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="460" viewBox="0 16 64 46" role="img" aria-label="Éventail de nuances">
+  <g transform="translate(32 56)">
+    <g transform="rotate(-40)">
+      <rect x="-5" y="-38" width="10" height="36" rx="2.2" fill="#f6f3ec"/>
+      <rect x="-4.15" y="-36.6" width="8.3" height="11.2" fill="#8eafd2"/>
+      <rect x="-4.15" y="-24.6" width="8.3" height="10" fill="#2c4c7c"/>
+      <rect x="-4.15" y="-13.8" width="8.3" height="9.6" fill="#17345c"/>
+    </g>
+    <g transform="rotate(40)">
+      <rect x="-5" y="-38" width="10" height="36" rx="2.2" fill="#f6f3ec"/>
+      <rect x="-4.15" y="-36.6" width="8.3" height="11.2" fill="#f0a198"/>
+      <rect x="-4.15" y="-24.6" width="8.3" height="10" fill="#c4473a"/>
+      <rect x="-4.15" y="-13.8" width="8.3" height="9.6" fill="#922e26"/>
+    </g>
+    <g transform="rotate(-20)">
+      <rect x="-5" y="-38" width="10" height="36" rx="2.2" fill="#f6f3ec"/>
+      <rect x="-4.15" y="-36.6" width="8.3" height="11.2" fill="#84c09a"/>
+      <rect x="-4.15" y="-24.6" width="8.3" height="10" fill="#2f6f4e"/>
+      <rect x="-4.15" y="-13.8" width="8.3" height="9.6" fill="#1b4632"/>
+    </g>
+    <g transform="rotate(20)">
+      <rect x="-5" y="-38" width="10" height="36" rx="2.2" fill="#f6f3ec"/>
+      <rect x="-4.15" y="-36.6" width="8.3" height="11.2" fill="#f4c48e"/>
+      <rect x="-4.15" y="-24.6" width="8.3" height="10" fill="#e28a3c"/>
+      <rect x="-4.15" y="-13.8" width="8.3" height="9.6" fill="#c65e24"/>
+    </g>
+    <g transform="rotate(0)">
+      <rect x="-5" y="-38" width="10" height="36" rx="2.2" fill="#f6f3ec"/>
+      <rect x="-4.15" y="-36.6" width="8.3" height="11.2" fill="#f6e3a6"/>
+      <rect x="-4.15" y="-24.6" width="8.3" height="10" fill="#e2b13c"/>
+      <rect x="-4.15" y="-13.8" width="8.3" height="9.6" fill="#c49222"/>
+    </g>
+    <circle r="4.2" fill="#242424"/>
+    <circle r="1.6" fill="#f3efe8"/>
+  </g>
 </svg>
+

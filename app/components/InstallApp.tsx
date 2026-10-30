@@ -32,7 +32,7 @@ export function InstallApp() {
     return (
       <button
         type="button"
-        className="mt-4 rounded-full bg-white px-4 py-2 text-sm font-semibold text-neutral-950"
+        className="mt-4 rounded-full bg-neutral-950 px-4 py-2 text-sm font-semibold text-white"
         onClick={() => {
           void promptEvent.prompt().then(() => setPromptEvent(null))
         }}
@@ -44,7 +44,7 @@ export function InstallApp() {
 
   if (iosHint) {
     return (
-      <p className="mt-4 text-sm text-white/75">
+      <p className="mt-4 text-sm text-neutral-700">
         Pour l'installer sur l'iPhone : Partager, puis Sur l'écran d'accueil.
       </p>
     )

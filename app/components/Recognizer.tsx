@@ -17,7 +17,7 @@ import {
 import { loadSavedColors, storeSavedColors, type SavedColor } from '~/lib/saved-colors'
 
 type Facing = 'environment' | 'user'
-type Phase = 'idle' | 'camera' | 'photo' | 'saved'
+type Phase = 'idle' | 'camera' | 'photo' | 'saved' | 'library'
 
 const primaryButton =
   'rounded-full bg-neutral-950 px-5 py-3 text-sm font-semibold text-white disabled:opacity-50'
@@ -50,6 +50,9 @@ export function Recognizer() {
   const [savedColors, setSavedColors] = useState<SavedColor[]>([])
   const [colorName, setColorName] = useState('')
   const [savedNotice, setSavedNotice] = useState<string | null>(null)
+  const [libraryFrom, setLibraryFrom] = useState<Phase>('idle')
+  const [renamingId, setRenamingId] = useState<string | null>(null)
+  const [renameValue, setRenameValue] = useState('')
 
   pointRef.current = point
 
@@ -268,6 +271,32 @@ export function Recognizer() {
     const next = savedColors.filter((entry) => entry.id !== id)
     setSavedColors(next)
     storeSavedColors(next)
+    if (renamingId === id) setRenamingId(null)
+  }
+
+  function openLibrary() {
+    setRenamingId(null)
+    setLibraryFrom(phase === 'library' ? libraryFrom : phase)
+    setPhase('library')
+  }
+
+  function closeLibrary() {
+    setRenamingId(null)
+    setPhase(libraryFrom === 'library' ? 'idle' : libraryFrom)
+  }
+
+  function startRename(entry: SavedColor) {
+    setRenamingId(entry.id)
+    setRenameValue(entry.name)
+  }
+
+  function renameColor(id: string) {
+    const name = renameValue.trim()
+    if (!name) return
+    const next = savedColors.map((entry) => (entry.id === id ? { ...entry, name } : entry))
+    setSavedColors(next)
+    storeSavedColors(next)
+    setRenamingId(null)
   }
 
   function updateDraft(next: Oklch) {
@@ -329,30 +358,73 @@ export function Recognizer() {
             <button type="button" className={secondaryButton} onClick={() => usePhoto(examplePhoto())}>
               Essayer sur une image d'exemple
             </button>
+            <button type="button" className={secondaryButton} onClick={openLibrary}>
+              Couleurs enregistrées{savedColors.length > 0 ? ` (${savedColors.length})` : ''}
+            </button>
           </div>
           {error ? <p className="mt-4 text-sm text-red-700">{error}</p> : null}
         </section>
       ) : null}
 
-      {phase === 'idle' && savedColors.length > 0 ? (
-        <section className="mt-4 rounded-3xl bg-white p-5 shadow-lg">
-          <h2 className="text-sm font-semibold">Couleurs enregistrées</h2>
-          <ul className="mt-3 divide-y divide-neutral-200">
-            {savedColors.map((entry) => (
-              <li key={entry.id} className="flex items-center gap-3 py-2">
-                <button type="button" className="flex min-w-0 flex-1 items-center gap-3 text-left" onClick={() => openSaved(entry)}>
-                  <span className="size-10 shrink-0 rounded-xl ring-1 ring-black/10" style={{ backgroundColor: rgbToHex(entry) }} />
-                  <span className="min-w-0">
-                    <span className="block truncate font-semibold">{entry.name}</span>
-                    <span className="block text-xs text-neutral-500">{rgbToNcs(entry).precise}</span>
-                  </span>
-                </button>
-                <button type="button" className="shrink-0 text-sm text-neutral-500 underline" onClick={() => forgetColor(entry.id)}>
-                  Retirer
-                </button>
-              </li>
-            ))}
-          </ul>
+      {phase === 'library' ? (
+        <section className="mt-6 rounded-3xl bg-white p-5 shadow-lg">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-sm font-semibold">Couleurs enregistrées</h2>
+            <button type="button" className="text-sm font-semibold text-neutral-700 underline" onClick={closeLibrary}>
+              Retour
+            </button>
+          </div>
+          {savedColors.length === 0 ? (
+            <p className="mt-4 text-sm text-neutral-600">Aucune couleur enregistrée pour le moment.</p>
+          ) : (
+            <ul className="mt-3 divide-y divide-neutral-200">
+              {savedColors.map((entry) => (
+                <li key={entry.id} className="py-2">
+                  {renamingId === entry.id ? (
+                    <form
+                      className="flex items-center gap-2"
+                      onSubmit={(event) => {
+                        event.preventDefault()
+                        renameColor(entry.id)
+                      }}
+                    >
+                      <span className="size-10 shrink-0 rounded-xl ring-1 ring-black/10" style={{ backgroundColor: rgbToHex(entry) }} />
+                      <input
+                        value={renameValue}
+                        onChange={(event) => setRenameValue(event.target.value)}
+                        aria-label="Nouveau nom"
+                        maxLength={80}
+                        autoFocus
+                        className="min-w-0 flex-1 rounded-full border border-neutral-300 px-3 py-2 text-sm text-neutral-950"
+                      />
+                      <button type="submit" className="shrink-0 text-sm font-semibold text-neutral-950 underline" disabled={!renameValue.trim()}>
+                        Valider
+                      </button>
+                      <button type="button" className="shrink-0 text-sm text-neutral-500 underline" onClick={() => setRenamingId(null)}>
+                        Annuler
+                      </button>
+                    </form>
+                  ) : (
+                    <div className="flex items-center gap-3">
+                      <button type="button" className="flex min-w-0 flex-1 items-center gap-3 text-left" onClick={() => openSaved(entry)}>
+                        <span className="size-10 shrink-0 rounded-xl ring-1 ring-black/10" style={{ backgroundColor: rgbToHex(entry) }} />
+                        <span className="min-w-0">
+                          <span className="block truncate font-semibold">{entry.name}</span>
+                          <span className="block text-xs text-neutral-500">{rgbToNcs(entry).precise}</span>
+                        </span>
+                      </button>
+                      <button type="button" className="shrink-0 text-sm font-semibold text-neutral-700 underline" onClick={() => startRename(entry)}>
+                        Renommer
+                      </button>
+                      <button type="button" className="shrink-0 text-sm text-neutral-500 underline" onClick={() => forgetColor(entry.id)}>
+                        Retirer
+                      </button>
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
       ) : null}
 
@@ -562,6 +634,9 @@ export function Recognizer() {
                   </button>
                 </form>
                 {savedNotice ? <p className="mt-2 text-sm text-neutral-600">« {savedNotice} » est enregistrée.</p> : null}
+                <button type="button" className={`${secondaryButton} mt-4`} onClick={openLibrary}>
+                  Couleurs enregistrées{savedColors.length > 0 ? ` (${savedColors.length})` : ''}
+                </button>
               </div>
 
               <div className="rounded-3xl bg-white p-4 shadow-lg">

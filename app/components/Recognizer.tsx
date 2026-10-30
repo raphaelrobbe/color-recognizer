@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState, type PointerEvent } from 'react'
+import { InstallApp } from '~/components/InstallApp'
 import {
   averageRgb,
   colorCodes,
   deltaE,
   fitOklch,
   inkOn,
+  maxOklchChroma,
   oklchToRgb,
   rgbToHex,
   rgbToOklch,
@@ -217,8 +219,9 @@ export function Recognizer() {
         <h1 className="mt-1 text-3xl font-semibold tracking-tight">ColorRecognizer</h1>
         <p className="mt-2 text-sm leading-relaxed text-white/80">
           Photographiez un mur, touchez l'endroit à mesurer, puis ajustez la pastille jusqu'à ce qu'elle
-          colle à ce que vous voyez.
+          colle à ce que vous voyez. Une fois chargée, l'application s'ouvre hors ligne.
         </p>
+        <InstallApp />
       </header>
 
       {phase === 'idle' ? (
@@ -380,10 +383,10 @@ export function Recognizer() {
                     label="Intensité"
                     valueLabel={draft.c.toFixed(3)}
                     min={0}
-                    max={0.4}
+                    max={Math.max(maxOklchChroma(draft.l, draft.h), 0.001)}
                     step={0.001}
                     value={draft.c}
-                    background={`linear-gradient(to right, ${rgbToHex(oklchToRgb({ ...draft, c: 0 }))}, ${rgbToHex(oklchToRgb({ ...draft, c: 0.4 }))})`}
+                    background={`linear-gradient(to right, ${rgbToHex(oklchToRgb({ ...draft, c: 0 }))}, ${rgbToHex(oklchToRgb({ l: draft.l, c: 0.5, h: draft.h }))})`}
                     onChange={(value) => updateDraft({ ...draft, c: value })}
                   />
                   <Slider

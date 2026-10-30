@@ -138,6 +138,11 @@ function linearInGamut(linear: [number, number, number]): boolean {
   return linear.every((channel) => channel >= -1e-4 && channel <= 1 + 1e-4)
 }
 
+/** Largest OKLCH chroma that still fits in sRGB for this lightness and hue. */
+export function maxOklchChroma(l: number, h: number): number {
+  return fitOklch({ l, c: 0.5, h }).c
+}
+
 export function fitOklch(oklch: Oklch): Oklch {
   const l = clamp(oklch.l, 0, 1)
   const h = ((oklch.h % 360) + 360) % 360

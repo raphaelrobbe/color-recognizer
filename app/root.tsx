@@ -2,6 +2,7 @@ import type { LinksFunction, MetaFunction } from '@remix-run/node'
 import { Links, Meta, Outlet, Scripts, ScrollRestoration, useRouteError } from '@remix-run/react'
 import { useEffect } from 'react'
 import type { ReactNode } from 'react'
+import { warmOfflineCache } from '~/lib/pwa'
 import stylesheet from '~/tailwind.css?url'
 
 export const meta: MetaFunction = () => [
@@ -13,22 +14,38 @@ export const meta: MetaFunction = () => [
   },
 ]
 
-export const links: LinksFunction = () => [
-  { rel: 'stylesheet', href: stylesheet },
-  { rel: 'icon', href: `${import.meta.env.BASE_URL}favicon.svg`, type: 'image/svg+xml' },
-]
+export const links: LinksFunction = () => {
+  const base = import.meta.env.BASE_URL
+  return [
+    { rel: 'stylesheet', href: stylesheet },
+    { rel: 'icon', href: `${base}favicon.svg`, type: 'image/svg+xml' },
+    { rel: 'apple-touch-icon', href: `${base}apple-touch-icon.png`, sizes: '180x180' },
+    { rel: 'manifest', href: `${base}site.webmanifest` },
+  ]
+}
 
 export function Layout({ children }: { children: ReactNode }) {
   return (
-    <html lang="fr">
+    <html lang="fr" style={{ backgroundColor: '#6f6f6f' }}>
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <meta name="theme-color" content="#6f6f6f" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-title" content="ColorRecognizer" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <Meta />
         <Links />
+        {import.meta.env.PROD ? (
+          <script
+            dangerouslySetInnerHTML={{
+              __html: `(function(){if(!('serviceWorker' in navigator))return;var b=${JSON.stringify(import.meta.env.BASE_URL)};navigator.serviceWorker.register(b+'sw.js',{scope:b}).catch(function(){})})();`,
+            }}
+          />
+        ) : null}
       </head>
-      <body>
+      <body style={{ margin: 0, backgroundColor: '#6f6f6f', color: '#1a1a1a' }}>
         {children}
         <ScrollRestoration />
         <Scripts />
@@ -38,11 +55,22 @@ export function Layout({ children }: { children: ReactNode }) {
 }
 
 export default function App() {
+  useEffect(() => {
+    warmOfflineCache()
+  }, [])
+
   return <Outlet />
 }
 
 export function HydrateFallback() {
-  return <p className="grid min-h-dvh place-items-center font-sans text-neutral-100">Chargement…</p>
+  return (
+    <p
+      className="grid min-h-dvh place-items-center font-sans text-lg"
+      style={{ margin: 0, backgroundColor: '#6f6f6f', color: '#f4f4f4' }}
+    >
+      Chargement…
+    </p>
+  )
 }
 
 export function ErrorBoundary() {
@@ -53,9 +81,11 @@ export function ErrorBoundary() {
   }, [error])
 
   return (
-    <main className="mx-auto max-w-lg px-4 py-16 text-center text-white">
-      <h1 className="text-xl font-semibold">Quelque chose s'est mal passé</h1>
-      <p className="mt-2 text-neutral-200">Rechargez la page pour reprendre la mesure.</p>
+    <main className="grid min-h-dvh place-items-center px-4 text-center" style={{ backgroundColor: '#6f6f6f', color: '#f4f4f4' }}>
+      <div>
+        <h1 className="text-xl font-semibold">Quelque chose s'est mal passé</h1>
+        <p className="mt-2">Rechargez la page pour reprendre la mesure.</p>
+      </div>
     </main>
   )
 }

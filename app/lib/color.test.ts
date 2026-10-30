@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { averageRgb, deltaE, labToRgb, oklchToRgb, rgbToHex, rgbToLab, rgbToNcs, rgbToOklch } from './color'
+import { averageRgb, deltaE, labToRgb, maxOklchChroma, oklchToRgb, rgbToHex, rgbToLab, rgbToNcs, rgbToOklch } from './color'
 
 describe('CIELAB', () => {
   it('maps white and black to the lightness ends', () => {
@@ -29,6 +29,14 @@ describe('CIELAB', () => {
 })
 
 describe('OKLCH', () => {
+  it('caps intensity at the sRGB boundary, well below the old slider max', () => {
+    const yellow = rgbToOklch({ r: 255, g: 255, b: 0 })
+    const limit = maxOklchChroma(yellow.l, yellow.h)
+    expect(limit).toBeGreaterThan(0.05)
+    expect(limit).toBeLessThan(0.25)
+    expect(oklchToRgb({ l: yellow.l, c: limit, h: yellow.h }).g).toBeGreaterThan(200)
+  })
+
   it('round-trips a grid of sRGB colours', () => {
     for (const r of [0, 40, 120, 200, 255]) {
       for (const g of [0, 40, 120, 200, 255]) {

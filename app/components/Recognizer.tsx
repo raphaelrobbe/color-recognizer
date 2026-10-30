@@ -698,7 +698,7 @@ export function Recognizer() {
                   ))}
                 </ul>
                 <p className="mt-3 text-xs leading-relaxed text-neutral-500">
-                  Le NCS affiché est une estimation CIELAB (noirceur d'Evans, teintes élémentaires R 25°, Y 92°, G 163°, B 253°).
+                  Le NCS affiché est une estimation lue sur les pixels : chromaticité relative à la teinte, noirceur sur le triangle de nuance.
                   Le nuancier officiel est sous licence : confirmez le code sur un éventail avant une commande de peinture.
                   RVB, hexadécimal, TSL, TSV, CMJN, CIELAB et OKLCH décrivent la pastille affichée.
                 </p>

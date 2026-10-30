@@ -253,46 +253,124 @@ export function averageRgb(pixels: Uint8ClampedArray): Rgb {
 }
 
 /**
- * NCS estimate from CIELAB.
- * Blackness follows Evans / Richter: N* = 100 - (L* + 0.5 C*ab),
- * then the colour is projected into the nuance triangle.
- * Elementary hues use the mean CIELAB angles R 25°, Y 92°, G 163°, B 253°.
+ * Screen samples of each NCS hue, every 10% of the circle Y → R → B → G.
+ * `h` is the CIELAB hue angle, `chroma` the C*ab of the full-chromatic colour,
+ * `lightness` its L*. Fitted on published sRGB approximations, not the licensed atlas.
+ */
+const NCS_HUE_RING: { pos: number; h: number; chroma: number; lightness: number }[] = [
+  { pos: 0, h: 90.8, chroma: 119.8, lightness: 85.5 },
+  { pos: 10, h: 83.2, chroma: 117.2, lightness: 82.4 },
+  { pos: 20, h: 77.0, chroma: 114.5, lightness: 77.7 },
+  { pos: 30, h: 68.4, chroma: 108.7, lightness: 72.6 },
+  { pos: 40, h: 62.0, chroma: 109.0, lightness: 66.7 },
+  { pos: 50, h: 55.6, chroma: 107.8, lightness: 63.7 },
+  { pos: 60, h: 49.5, chroma: 102.5, lightness: 60.2 },
+  { pos: 70, h: 43.3, chroma: 98.6, lightness: 56.4 },
+  { pos: 80, h: 35.6, chroma: 96.3, lightness: 53.8 },
+  { pos: 90, h: 29.6, chroma: 91.4, lightness: 50.3 },
+  { pos: 100, h: 20.8, chroma: 87.5, lightness: 50.3 },
+  { pos: 110, h: 11.9, chroma: 83.6, lightness: 48.2 },
+  { pos: 120, h: 2.0, chroma: 85.6, lightness: 50.0 },
+  { pos: 130, h: 349.0, chroma: 83.5, lightness: 50.4 },
+  { pos: 140, h: 333.9, chroma: 82.3, lightness: 50.9 },
+  { pos: 150, h: 319.8, chroma: 79.8, lightness: 50.1 },
+  { pos: 160, h: 302.4, chroma: 76.5, lightness: 53.0 },
+  { pos: 170, h: 285.7, chroma: 74.6, lightness: 51.0 },
+  { pos: 180, h: 271.4, chroma: 72.9, lightness: 52.1 },
+  { pos: 190, h: 257.4, chroma: 70.4, lightness: 51.0 },
+  { pos: 200, h: 241.5, chroma: 67.8, lightness: 54.5 },
+  { pos: 210, h: 225.7, chroma: 68.9, lightness: 56.5 },
+  { pos: 220, h: 217.9, chroma: 69.6, lightness: 59.9 },
+  { pos: 230, h: 208.9, chroma: 73.0, lightness: 59.4 },
+  { pos: 240, h: 202.2, chroma: 75.8, lightness: 61.1 },
+  { pos: 250, h: 196.1, chroma: 74.7, lightness: 61.9 },
+  { pos: 260, h: 190.0, chroma: 80.3, lightness: 64.0 },
+  { pos: 270, h: 184.6, chroma: 80.1, lightness: 64.3 },
+  { pos: 280, h: 178.7, chroma: 83.4, lightness: 65.0 },
+  { pos: 290, h: 171.3, chroma: 85.5, lightness: 64.1 },
+  { pos: 300, h: 161.9, chroma: 89.2, lightness: 65.2 },
+  { pos: 310, h: 151.4, chroma: 92.3, lightness: 66.1 },
+  { pos: 320, h: 141.5, chroma: 94.0, lightness: 67.7 },
+  { pos: 330, h: 131.6, chroma: 97.1, lightness: 71.4 },
+  { pos: 340, h: 121.4, chroma: 99.6, lightness: 73.3 },
+  { pos: 350, h: 115.0, chroma: 108.7, lightness: 77.1 },
+  { pos: 360, h: 110.4, chroma: 112.9, lightness: 81.0 },
+  { pos: 370, h: 106.3, chroma: 114.8, lightness: 83.2 },
+  { pos: 380, h: 101.0, chroma: 118.0, lightness: 84.0 },
+  { pos: 390, h: 96.0, chroma: 119.9, lightness: 85.7 },
+]
+
+const NCS_SECTORS: [Elementary, Elementary][] = [
+  ['Y', 'R'],
+  ['R', 'B'],
+  ['B', 'G'],
+  ['G', 'Y'],
+]
+
+const ncsRing = (() => {
+  let unwrapped = NCS_HUE_RING[0].h
+  const circle = NCS_HUE_RING.map((anchor, index) => {
+    if (index > 0) {
+      let next = anchor.h
+      while (next > unwrapped) next -= 360
+      unwrapped = next
+    }
+    return { ...anchor, u: unwrapped }
+  })
+  const first = circle[0]
+  return [...circle, { pos: 400, chroma: first.chroma, lightness: first.lightness, u: first.u - 360 }]
+})()
+
+/**
+ * NCS estimate read from the measured pixels.
+ * Chromaticness is C*ab divided by the full-chromatic C*ab of that hue,
+ * and blackness is the complement that puts the colour on the nuance triangle
+ * between white and that full-chromatic colour.
  * The licensed NCS atlas is not reproduced here.
  */
 export function rgbToNcs(rgb: Rgb): NcsColor {
   const lab = rgbToLab(rgb)
   const chroma = Math.hypot(lab.a, lab.b)
-  let hue = (Math.atan2(lab.b, lab.a) * 180) / Math.PI
-  if (hue < 0) hue += 360
-
   if (chroma < 2) {
     return ncsFromParts(clamp(100 - lab.L, 0, 100), 0, 'N', 'N')
   }
 
-  const sector = ncsHueFromLabHue(hue)
-  const limited = Math.min(chroma, 100, 2 * lab.L, 2 * (100 - lab.L))
-  const chromaticness = clamp(limited, 0, 100)
-  const blackness = clamp(100 - lab.L - 0.5 * chromaticness, 0, 100)
+  let hue = (Math.atan2(lab.b, lab.a) * 180) / Math.PI
+  if (hue < 0) hue += 360
+  const place = ncsPlace(hue)
+  let chromaticness = clamp((chroma * 100) / place.chroma, 0, 100)
+  const blackness = clamp(100 - lab.L - chromaticness * (1 - place.lightness / 100), 0, 100)
+  if (blackness + chromaticness > 100) chromaticness = 100 - blackness
+
+  const sector = ncsHueLabel(place.pos)
   return ncsFromParts(blackness, chromaticness, sector.precise, sector.nearest)
 }
 
-function ncsHueFromLabHue(hue: number): { precise: string; nearest: string } {
-  const percent = (value: number) => clamp(value, 0, 100)
-  if (hue >= 25 && hue < 92) {
-    const towardRed = percent(((92 - hue) / (92 - 25)) * 100)
-    return { precise: formatHue('Y', 'R', towardRed), nearest: formatHue('Y', 'R', snap5(towardRed)) }
+function ncsPlace(hue: number): { pos: number; chroma: number; lightness: number } {
+  const start = ncsRing[0].u
+  const end = ncsRing[ncsRing.length - 1].u
+  let unwrapped = hue
+  while (unwrapped > start) unwrapped -= 360
+  while (unwrapped < end) unwrapped += 360
+  let index = 0
+  while (index < ncsRing.length - 2 && unwrapped < ncsRing[index + 1].u) index += 1
+  const left = ncsRing[index]
+  const right = ncsRing[index + 1]
+  const span = right.u - left.u
+  const t = span === 0 ? 0 : (unwrapped - left.u) / span
+  return {
+    pos: left.pos + t * (right.pos - left.pos),
+    chroma: left.chroma + t * (right.chroma - left.chroma),
+    lightness: left.lightness + t * (right.lightness - left.lightness),
   }
-  if (hue >= 92 && hue < 163) {
-    const towardYellow = percent(((163 - hue) / (163 - 92)) * 100)
-    return { precise: formatHue('G', 'Y', towardYellow), nearest: formatHue('G', 'Y', snap5(towardYellow)) }
-  }
-  if (hue >= 163 && hue < 253) {
-    const towardGreen = percent(((253 - hue) / (253 - 163)) * 100)
-    return { precise: formatHue('B', 'G', towardGreen), nearest: formatHue('B', 'G', snap5(towardGreen)) }
-  }
-  const unwrapped = hue < 25 ? hue + 360 : hue
-  const towardBlue = percent(((385 - unwrapped) / (385 - 253)) * 100)
-  return { precise: formatHue('R', 'B', towardBlue), nearest: formatHue('R', 'B', snap5(towardBlue)) }
+}
+
+function ncsHueLabel(pos: number): { precise: string; nearest: string } {
+  const wrapped = pos >= 400 ? 0 : pos
+  const sector = Math.min(3, Math.floor(wrapped / 100))
+  const percent = wrapped - sector * 100
+  const [from, to] = NCS_SECTORS[sector]
+  return { precise: formatHue(from, to, percent), nearest: formatHue(from, to, snap5(percent)) }
 }
 
 function formatHue(from: Elementary, to: Elementary, percent: number): string {

@@ -90,7 +90,26 @@ describe('NCS estimate', () => {
     expect(rgbToNcs({ r: 0, g: 255, b: 0 }).precise).toContain('G')
     const blue = rgbToNcs({ r: 0, g: 0, b: 255 })
     expect(blue.precise).toContain('B')
-    expect(blue.blackness).toBeGreaterThan(20)
+    expect(blue.blackness).toBeGreaterThanOrEqual(20)
+  })
+
+  it('reads a light yellow from the pixels instead of calling an olive that code', () => {
+    const published = rgbToNcs({ r: 252, g: 200, b: 104 })
+    expect(published.hueLabel).toMatch(/^Y1[0-5]R$/)
+    expect(published.blackness).toBeLessThan(15)
+    expect(published.chromaticness).toBeGreaterThanOrEqual(40)
+    expect(published.chromaticness).toBeLessThanOrEqual(60)
+
+    const lookedUp = rgbToNcs({ r: 239, g: 224, b: 90 })
+    expect(lookedUp.blackness).toBeLessThan(15)
+    expect(lookedUp.chromaticness).toBeGreaterThanOrEqual(45)
+    expect(lookedUp.chromaticness).toBeLessThanOrEqual(65)
+    expect(lookedUp.hueLabel).toMatch(/^(Y|G8\dY|G9\dY)$/)
+
+    const olive = rgbToNcs({ r: 220, g: 179, b: 87 })
+    expect(olive.precise).not.toBe('S 0050-Y10R')
+    expect(olive.nearest).not.toBe('S 0050-Y10R')
+    expect(olive.blackness).toBeGreaterThan(published.blackness)
   })
 })
 

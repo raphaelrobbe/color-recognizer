@@ -9,13 +9,15 @@ import {
   maxOklchChroma,
   oklchToRgb,
   rgbToHex,
+  rgbToNcs,
   rgbToOklch,
   type Oklch,
   type Rgb,
 } from '~/lib/color'
+import { loadSavedColors, storeSavedColors, type SavedColor } from '~/lib/saved-colors'
 
 type Facing = 'environment' | 'user'
-type Phase = 'idle' | 'camera' | 'photo'
+type Phase = 'idle' | 'camera' | 'photo' | 'saved'
 
 const primaryButton =
   'rounded-full bg-neutral-950 px-5 py-3 text-sm font-semibold text-white disabled:opacity-50'
@@ -29,6 +31,7 @@ export function Recognizer() {
   const imageRef = useRef<HTMLImageElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const pointRef = useRef<{ x: number; y: number } | null>(null)
+  const gestureCleanupRef = useRef<(() => void) | null>(null)
 
   const [phase, setPhase] = useState<Phase>('idle')
   const [facing, setFacing] = useState<Facing>('environment')
@@ -43,6 +46,10 @@ export function Recognizer() {
   const [tweaked, setTweaked] = useState(false)
   const [radius, setRadius] = useState(4)
   const [copied, setCopied] = useState<string | null>(null)
+  const [canNativeShare, setCanNativeShare] = useState(false)
+  const [savedColors, setSavedColors] = useState<SavedColor[]>([])
+  const [colorName, setColorName] = useState('')
+  const [savedNotice, setSavedNotice] = useState<string | null>(null)
 
   pointRef.current = point
 
@@ -51,8 +58,14 @@ export function Recognizer() {
   const shift = sample && shown ? deltaE(sample, shown) : 0
 
   useEffect(() => {
+    setCanNativeShare(typeof navigator.share === 'function')
+    setSavedColors(loadSavedColors())
+  }, [])
+
+  useEffect(() => {
     return () => {
       streamRef.current?.getTracks().forEach((track) => track.stop())
+      gestureCleanupRef.current?.()
     }
   }, [])
 
@@ -185,7 +198,7 @@ export function Recognizer() {
     setTweaked(false)
   }
 
-  function onPick(event: PointerEvent<HTMLImageElement>) {
+  function onPhotoPointerDown(event: PointerEvent<HTMLImageElement>) {
     if (event.button !== 0) return
     const image = imageRef.current
     if (!image || !canvasRef.current) return
@@ -193,12 +206,87 @@ export function Recognizer() {
     const x = ((event.clientX - rect.left) / rect.width) * image.naturalWidth
     const y = ((event.clientY - rect.top) / rect.height) * image.naturalHeight
     if (x < 0 || y < 0 || x > image.naturalWidth || y > image.naturalHeight) return
-    readSample(x, y, radius)
+
+    const startX = event.clientX
+    const startY = event.clientY
+    const pointerId = event.pointerId
+    let moved = false
+
+    const onMove = (ev: globalThis.PointerEvent) => {
+      if (ev.pointerId !== pointerId) return
+      if (Math.hypot(ev.clientX - startX, ev.clientY - startY) > 12) moved = true
+    }
+    const finish = (ev: globalThis.PointerEvent) => {
+      if (ev.pointerId !== pointerId) return
+      detach()
+      if (ev.type === 'pointercancel' || moved) return
+      readSample(x, y, radius)
+    }
+    const detach = () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', finish)
+      window.removeEventListener('pointercancel', finish)
+      if (gestureCleanupRef.current === detach) gestureCleanupRef.current = null
+    }
+    gestureCleanupRef.current?.()
+    gestureCleanupRef.current = detach
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', finish)
+    window.addEventListener('pointercancel', finish)
+  }
+
+  function openSaved(entry: SavedColor) {
+    stopStream()
+    setPhotoUrl((previous) => {
+      if (previous?.startsWith('blob:')) URL.revokeObjectURL(previous)
+      return null
+    })
+    setPoint(null)
+    setNatural(null)
+    canvasRef.current = null
+    const rgb = { r: entry.r, g: entry.g, b: entry.b }
+    setSample(rgb)
+    setDraft(rgbToOklch(rgb))
+    setTweaked(false)
+    setColorName('')
+    setSavedNotice(null)
+    setPhase('saved')
+  }
+
+  function rememberColor() {
+    if (!shown) return
+    const name = colorName.trim()
+    if (!name) return
+    const next = [{ id: newColorId(), name, r: shown.r, g: shown.g, b: shown.b }, ...savedColors]
+    setSavedColors(next)
+    storeSavedColors(next)
+    setColorName('')
+    setSavedNotice(name)
+  }
+
+  function forgetColor(id: string) {
+    const next = savedColors.filter((entry) => entry.id !== id)
+    setSavedColors(next)
+    storeSavedColors(next)
   }
 
   function updateDraft(next: Oklch) {
     setDraft(fitOklch(next))
     setTweaked(true)
+  }
+
+  async function shareColor(rgb: Rgb, text: string, label: string) {
+    if (typeof navigator.share !== 'function') return
+    const file = await swatchFile(rgb, label)
+    const withFile: ShareData = { title: 'ColorRecognizer', text, files: file ? [file] : undefined }
+    const payload: ShareData =
+      file && navigator.canShare?.({ files: [file] }) ? withFile : { title: 'ColorRecognizer', text }
+    try {
+      await navigator.share(payload)
+    } catch (caught) {
+      if (caught instanceof DOMException && caught.name === 'AbortError') return
+      setError("Le partage n'est pas disponible sur cet appareil.")
+    }
   }
 
   async function copyText(id: string, text: string) {
@@ -218,7 +306,7 @@ export function Recognizer() {
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/70">Mesure</p>
         <h1 className="mt-1 text-3xl font-semibold tracking-tight">ColorRecognizer</h1>
         <p className="mt-2 text-sm leading-relaxed text-white/80">
-          Photographiez un mur, touchez l'endroit à mesurer, puis ajustez la pastille jusqu'à ce qu'elle
+          Prenez une photo, touchez l'endroit à mesurer, puis ajustez la pastille jusqu'à ce qu'elle
           colle à ce que vous voyez. Une fois chargée, l'application s'ouvre hors ligne.
         </p>
         <InstallApp />
@@ -243,6 +331,28 @@ export function Recognizer() {
             </button>
           </div>
           {error ? <p className="mt-4 text-sm text-red-700">{error}</p> : null}
+        </section>
+      ) : null}
+
+      {phase === 'idle' && savedColors.length > 0 ? (
+        <section className="mt-4 rounded-3xl bg-white p-5 shadow-lg">
+          <h2 className="text-sm font-semibold">Couleurs enregistrées</h2>
+          <ul className="mt-3 divide-y divide-neutral-200">
+            {savedColors.map((entry) => (
+              <li key={entry.id} className="flex items-center gap-3 py-2">
+                <button type="button" className="flex min-w-0 flex-1 items-center gap-3 text-left" onClick={() => openSaved(entry)}>
+                  <span className="size-10 shrink-0 rounded-xl ring-1 ring-black/10" style={{ backgroundColor: rgbToHex(entry) }} />
+                  <span className="min-w-0">
+                    <span className="block truncate font-semibold">{entry.name}</span>
+                    <span className="block text-xs text-neutral-500">{rgbToNcs(entry).precise}</span>
+                  </span>
+                </button>
+                <button type="button" className="shrink-0 text-sm text-neutral-500 underline" onClick={() => forgetColor(entry.id)}>
+                  Retirer
+                </button>
+              </li>
+            ))}
+          </ul>
         </section>
       ) : null}
 
@@ -280,15 +390,22 @@ export function Recognizer() {
         </section>
       ) : null}
 
-      {phase === 'photo' && photoUrl ? (
+      {(phase === 'photo' && photoUrl) || phase === 'saved' ? (
         <section className="mt-6 space-y-4">
+          {phase === 'saved' ? (
+            <button type="button" className={secondaryButton} onClick={() => setPhase('idle')}>
+              Retour
+            </button>
+          ) : null}
+          {phase === 'photo' && photoUrl ? (
+            <>
           <div className="relative overflow-hidden rounded-3xl bg-black shadow-lg">
             <img
               ref={imageRef}
               src={photoUrl}
               alt="Photo à mesurer"
               onLoad={onImageLoad}
-              onPointerDown={onPick}
+              onPointerDown={onPhotoPointerDown}
               draggable={false}
               className="block h-auto w-full cursor-crosshair touch-manipulation select-none"
             />
@@ -337,6 +454,8 @@ export function Recognizer() {
               onChange={(event) => setRadius(Number(event.target.value))}
             />
           </label>
+            </>
+          ) : null}
 
           {!shown ? (
             <p className="rounded-3xl bg-white px-4 py-5 text-sm text-neutral-700 shadow-lg">
@@ -346,9 +465,20 @@ export function Recognizer() {
 
           {shown && codes && draft ? (
             <div className="space-y-4">
-              <div className="overflow-hidden rounded-3xl shadow-lg" style={{ backgroundColor: rgbToHex(shown) }}>
+              <div className="relative overflow-hidden rounded-3xl shadow-lg" style={{ backgroundColor: rgbToHex(shown) }}>
+                {canNativeShare ? (
+                  <button
+                    type="button"
+                    aria-label="Partager"
+                    className="absolute top-3 right-3 grid size-11 place-items-center rounded-full bg-black/15"
+                    style={{ color: inkOn(shown) }}
+                    onClick={() => void shareColor(shown, codes.text, codes.ncs.precise)}
+                  >
+                    <ShareIcon />
+                  </button>
+                ) : null}
                 <div className="flex min-h-52 flex-col items-center justify-center px-4 py-8 text-center" style={{ color: inkOn(shown) }}>
-                  <p className="text-xs font-semibold uppercase tracking-[0.16em] opacity-80">À comparer au mur</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] opacity-80">À comparer à ce que vous voyez</p>
                   <p className="mt-2 text-3xl font-semibold tracking-tight">{codes.ncs.precise}</p>
                   {codes.ncs.nearest !== codes.ncs.precise ? (
                     <p className="mt-1 text-sm opacity-80">Nuancier proche : {codes.ncs.nearest}</p>
@@ -365,8 +495,8 @@ export function Recognizer() {
                   </p>
                 </div>
                 <p className="mt-4 text-sm leading-relaxed text-neutral-600">
-                  Ces curseurs compensent l'écart de l'objectif et du capteur. Tenez la pastille à côté de la surface
-                  réelle et arrêtez-vous quand les deux se confondent.
+                  Ces curseurs compensent l'écart de l'objectif et du capteur. Tenez la pastille à côté de ce que
+                  vous voyez et arrêtez-vous quand les deux se confondent.
                 </p>
                 <div className="mt-4 space-y-4">
                   <Slider
@@ -412,6 +542,26 @@ export function Recognizer() {
                 >
                   Réinitialiser la correction
                 </button>
+                <form
+                  className="mt-4 flex gap-2"
+                  onSubmit={(event) => {
+                    event.preventDefault()
+                    rememberColor()
+                  }}
+                >
+                  <input
+                    value={colorName}
+                    onChange={(event) => setColorName(event.target.value)}
+                    placeholder="Nom de la couleur"
+                    aria-label="Nom de la couleur"
+                    maxLength={80}
+                    className="min-w-0 flex-1 rounded-full border border-neutral-300 px-4 py-2 text-sm text-neutral-950"
+                  />
+                  <button type="submit" className={primaryButton} disabled={!colorName.trim()}>
+                    Enregistrer
+                  </button>
+                </form>
+                {savedNotice ? <p className="mt-2 text-sm text-neutral-600">« {savedNotice} » est enregistrée.</p> : null}
               </div>
 
               <div className="rounded-3xl bg-white p-4 shadow-lg">
@@ -461,6 +611,41 @@ export function Recognizer() {
       />
     </main>
   )
+}
+
+function newColorId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID()
+  return `color-${Date.now()}-${Math.random().toString(16).slice(2)}`
+}
+
+function ShareIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M12 3.5v11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <path d="M7.5 8 12 3.5 16.5 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M6 12.5V18a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-5.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function swatchFile(rgb: Rgb, label: string): Promise<File | null> {
+  const canvas = document.createElement('canvas')
+  canvas.width = 800
+  canvas.height = 800
+  const context = canvas.getContext('2d')
+  if (!context) return Promise.resolve(null)
+  context.fillStyle = rgbToHex(rgb)
+  context.fillRect(0, 0, 800, 800)
+  context.fillStyle = inkOn(rgb)
+  context.font = '600 54px sans-serif'
+  context.textAlign = 'center'
+  context.textBaseline = 'middle'
+  context.fillText(label, 400, 400)
+  return new Promise((resolve) => {
+    canvas.toBlob((blob) => {
+      resolve(blob ? new File([blob], 'color-recognizer.png', { type: 'image/png' }) : null)
+    }, 'image/png')
+  })
 }
 
 function Slider({

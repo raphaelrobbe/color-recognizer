@@ -10,7 +10,7 @@ export const meta: MetaFunction = () => [
   {
     name: 'description',
     content:
-      'Photographiez une surface, prélevez une couleur et corrigez-la pour obtenir un code NCS, RVB et autres.',
+      'Prenez une photo, prélevez une couleur et corrigez-la pour obtenir un code NCS, RVB et autres.',
   },
 ]
 
